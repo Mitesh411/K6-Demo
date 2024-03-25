@@ -1,0 +1,23 @@
+name: Basic Workflow
+on: [push]
+
+jobs:
+  k6_local_test:
+    name: k6 local test run - basic example
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Run local k6 test
+        uses: grafana/k6-action@v0.2.0
+        with:
+          filename: basic/script.js
+          flags: --out json=results.json
+
+      - name: Upload performance test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: k6-report
+          path: index.html
