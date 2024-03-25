@@ -14,7 +14,7 @@ jobs:
         uses: grafana/k6-action@v0.2.0
         with:
           filename: ./script.js
-          flags: --out html=index.html
+          flags: --out json=index.json --summary-export index.html
 
       - name: Upload performance test results
         uses: actions/upload-artifact@v3
