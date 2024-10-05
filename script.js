@@ -5,11 +5,11 @@ import { textSummary } from "https://jslib.k6.io/k6-summary/0.0.1/index.js";
 import { check, sleep } from 'k6';
 
 export const options ={
-    vus: 50,
+    vus: 5,
     duration: '3s'
 }
   export default function () {
-    const res =http.get('http://test.k6.io');
+    const res =http.get('https://mitesh411.github.io/MyResume/');
     check(res,{'Status was 200': r => r.status == 200});
     sleep(1);
   }
