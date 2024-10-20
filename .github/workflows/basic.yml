@@ -24,4 +24,4 @@ jobs:
         uses: actions/upload-artifact@v4.4.0
         with:
           name: k6-report
-          path: index.json
+          path: test-report.html
