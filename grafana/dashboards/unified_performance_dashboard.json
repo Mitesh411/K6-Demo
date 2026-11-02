@@ -1,0 +1,574 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Real-Time Backend API Overview (k6)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 15, "gradientMode": "none", "showPoints": "auto" },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+          "query": "SELECT count(\"value\") / 10 FROM \"http_reqs\" WHERE (\"test_run_id\" =~ /^$test_run_id$/ OR \"$test_run_id\" = 'All') AND $timeFilter GROUP BY time(10s), \"name\" fill(0)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Throughput / RPS by Endpoint",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 10, "showPoints": "never" },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 1 },
+      "id": 2,
+      "options": {
+        "legend": { "calcs": ["mean", "max", "p95"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+          "query": "SELECT mean(\"value\") AS \"mean\", percentile(\"value\", 90) AS \"p90\", percentile(\"value\", 95) AS \"p95\", percentile(\"value\", 99) AS \"p99\" FROM \"http_req_duration\" WHERE (\"test_run_id\" =~ /^$test_run_id$/ OR \"$test_run_id\" = 'All') AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Response Time Latency Percentiles (p90, p95, p99)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 20, "showPoints": "auto" },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 1 },
+      "id": 3,
+      "options": {
+        "legend": { "calcs": ["max", "last"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+          "query": "SELECT mean(\"value\") FROM \"http_req_failed\" WHERE (\"test_run_id\" =~ /^$test_run_id$/ OR \"$test_run_id\" = 'All') AND $timeFilter GROUP BY time($__interval) fill(0)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Error Rate (% Failed Requests)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 },
+      "id": 101,
+      "title": "Frontend Web Performance (sitespeed.io)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-sitespeed" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 15 },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 9 },
+      "id": 4,
+      "options": {
+        "legend": { "calcs": ["mean", "last"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-sitespeed" },
+          "query": "SELECT mean(\"median\") AS \"TTFB\" FROM \"ttfb\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        },
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-sitespeed" },
+          "query": "SELECT mean(\"median\") AS \"FirstPaint\" FROM \"firstPaint\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series"
+        },
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-sitespeed" },
+          "query": "SELECT mean(\"median\") AS \"DOMContentLoaded\" FROM \"domContentLoadedTime\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series"
+        },
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-sitespeed" },
+          "query": "SELECT mean(\"median\") AS \"SpeedIndex\" FROM \"SpeedIndex\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "refId": "D",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Frontend Core Web Vitals & Load Timings (TTFB, FCP, SpeedIndex)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-sitespeed" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "green", "value": 90 }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 9 },
+      "id": 5,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-sitespeed" },
+          "query": "SELECT mean(\"median\") FROM \"score\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Frontend Coach Score / Performance Score",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-sitespeed" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1500 },
+              { "color": "red", "value": 2500 }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 9 },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-sitespeed" },
+          "query": "SELECT mean(\"median\") FROM \"FirstVisualChange\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "First Visual Change (Median)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "id": 102,
+      "title": "Test Run Comparison (Backend & Frontend)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Failed Requests" },
+            "properties": [
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red", "value": 1 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p95 Latency (ms)" },
+            "properties": [
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "yellow", "value": 300 },
+                    { "color": "red", "value": 1000 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
+      "id": 7,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Total Requests" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+          "query": "SELECT count(\"value\") AS \"Total Requests\", mean(\"value\") AS \"Avg Latency (ms)\", percentile(\"value\", 95) AS \"p95 Latency (ms)\", percentile(\"value\", 99) AS \"p99 Latency (ms)\" FROM \"http_req_duration\" WHERE $timeFilter GROUP BY \"test_run_id\"",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table"
+        },
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+          "query": "SELECT sum(\"value\") AS \"Failed Requests\" FROM \"http_req_failed\" WHERE $timeFilter GROUP BY \"test_run_id\"",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "table"
+        }
+      ],
+      "title": "Backend Test Run Comparison Table",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 15, "stacking": { "group": "normal", "mode": "none" } },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 17 },
+      "id": 8,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+          "query": "SELECT mean(\"value\") FROM \"http_req_duration\" WHERE (\"test_run_id\" =~ /^$compare_run_1$/ OR \"test_run_id\" =~ /^$compare_run_2$/) AND $timeFilter GROUP BY time($__interval), \"test_run_id\" fill(null)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Side-by-Side Run Latency Comparison ($compare_run_1 vs $compare_run_2)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 25 },
+      "id": 103,
+      "title": "Failed Request Tracing & Root-Cause Debugging",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "filterable": true,
+            "inspect": true
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "text", "value": null }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "status" },
+            "properties": [
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": 200 },
+                    { "color": "red", "value": 400 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "trace_id" },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 240
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
+      "id": 9,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": true, "fields": "", "reducer": ["sum"], "show": true },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Time" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+          "query": "SELECT \"trace_id\", \"url\", \"method\", \"status\", \"error\", \"duration_ms\", \"ttfb_ms\", \"connecting_ms\", \"test_run_id\" FROM \"failed_requests_trace\" WHERE (\"test_run_id\" =~ /^$test_run_id$/ OR \"$test_run_id\" = 'All') AND $timeFilter ORDER BY time DESC LIMIT 200",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table"
+        }
+      ],
+      "title": "Detailed Failed Request Traces (Direct Request Debugging)",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 40,
+            "stacking": { "group": "normal", "mode": "normal" }
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 14, "x": 0, "y": 34 },
+      "id": 10,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+          "query": "SELECT mean(\"connecting_ms\") AS \"Connecting\", mean(\"ttfb_ms\") AS \"TTFB (Waiting)\", mean(\"receiving_ms\") AS \"Receiving (Transfer)\" FROM \"failed_requests_trace\" WHERE (\"test_run_id\" =~ /^$test_run_id$/ OR \"$test_run_id\" = 'All') AND $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Failed Request Latency Breakdown (DNS/Connecting vs TTFB vs Transfer)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 10, "x": 14, "y": 34 },
+      "id": 11,
+      "options": {
+        "displayLabels": ["name", "value", "percent"],
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["count"], "fields": "", "values": false },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+          "query": "SELECT count(\"duration_ms\") FROM \"failed_requests_trace\" WHERE (\"test_run_id\" =~ /^$test_run_id$/ OR \"$test_run_id\" = 'All') AND $timeFilter GROUP BY \"error_category\"",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ],
+      "title": "Failure Distribution by Error Category",
+      "type": "piechart"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["performance", "k6", "sitespeed"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": "All", "value": "All" },
+        "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+        "definition": "SHOW TAG VALUES FROM \"http_req_duration\" WITH KEY = \"test_run_id\"",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Test Run ID",
+        "multi": false,
+        "name": "test_run_id",
+        "options": [],
+        "query": "SHOW TAG VALUES FROM \"http_req_duration\" WITH KEY = \"test_run_id\"",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 2,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+        "definition": "SHOW TAG VALUES FROM \"http_req_duration\" WITH KEY = \"test_run_id\"",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Compare Run 1",
+        "multi": false,
+        "name": "compare_run_1",
+        "options": [],
+        "query": "SHOW TAG VALUES FROM \"http_req_duration\" WITH KEY = \"test_run_id\"",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 2,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "datasource": { "type": "influxdb", "uid": "InfluxDB-k6" },
+        "definition": "SHOW TAG VALUES FROM \"http_req_duration\" WITH KEY = \"test_run_id\"",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Compare Run 2",
+        "multi": false,
+        "name": "compare_run_2",
+        "options": [],
+        "query": "SHOW TAG VALUES FROM \"http_req_duration\" WITH KEY = \"test_run_id\"",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+  },
+  "timezone": "browser",
+  "title": "Unified Performance & Load Testing Dashboard",
+  "uid": "unified-perf-dashboard",
+  "version": 2
+}
