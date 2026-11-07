@@ -3,13 +3,76 @@ name: Basic Workflow
 # Manual trigger only: run from the Actions tab -> "Basic Workflow" -> "Run workflow".
 on:
   workflow_dispatch:
+    inputs:
+      load_profile:
+        description: Load profile for the API test
+        type: choice
+        options: [smoke, load, stress, spike, soak, breakpoint]
+        default: smoke
+      target_host:
+        description: Target base URL. Leave empty to test the bundled sample app, started by this workflow.
+        type: string
+        default: ''
+      run_browser_test:
+        description: Also run the browser (Core Web Vitals) test
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
+# One performance run per branch at a time; a new run waits for the current one.
+concurrency:
+  group: k6-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  K6_VERSION: '2.3.0'
+  TARGET_HOST: ${{ inputs.target_host || 'http://localhost:8080' }}
+  TEST_RUN_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
+  K6_WEB_DASHBOARD: 'true'
+
 jobs:
-  k6_local_test:
-    name: k6 local test run with web dashboard report
+  api_test:
+    name: API load test (${{ inputs.load_profile }})
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.load_profile == 'soak' && 80 || 40 }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Start sample app
+        if: inputs.target_host == ''
+        run: docker compose up --detach --wait sample-app
+
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v1.2.2
+        with:
+          k6-version: ${{ env.K6_VERSION }}
+
+      # Thresholds in k6/config/thresholds.js fail this step when an SLO is breached.
+      - name: Run k6 API test
+        env:
+          LOAD_PROFILE: ${{ inputs.load_profile }}
+          K6_WEB_DASHBOARD_EXPORT: reports/api-report.html
+          # Short runs need a short sampling period, or the report is skipped.
+          K6_WEB_DASHBOARD_PERIOD: ${{ inputs.load_profile == 'smoke' && '1s' || '10s' }}
+        run: |
+          mkdir -p reports
+          k6 run k6/load-test.js
+
+      - name: Upload API test report
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: k6-api-report-${{ inputs.load_profile }}
+          path: reports/
+          if-no-files-found: warn
+
+  browser_test:
+    name: Browser Web Vitals test
+    if: inputs.run_browser_test
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -17,22 +80,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
 
-      - name: Set up k6
+      - name: Start sample app
+        if: inputs.target_host == ''
+        run: docker compose up --detach --wait sample-app
+
+      - name: Set up k6 with browser dependencies
         uses: grafana/setup-k6-action@v1.2.2
         with:
-          k6-version: '2.3.0'
+          k6-version: ${{ env.K6_VERSION }}
+          browser: true
 
-      # The web dashboard is built into k6, so no custom xk6 build is needed.
-      - name: Run k6 test with dashboard export
+      - name: Run k6 browser test
         env:
-          K6_WEB_DASHBOARD: 'true'
-          K6_WEB_DASHBOARD_EXPORT: test-report.html
-        run: k6 run script.js
+          K6_WEB_DASHBOARD_EXPORT: reports/browser-report.html
+          K6_WEB_DASHBOARD_PERIOD: 1s
+          K6_BROWSER_HEADLESS: 'true'
+          # GitHub-hosted Ubuntu runners restrict the Chromium sandbox.
+          K6_BROWSER_ARGS: no-sandbox
+        run: |
+          mkdir -p reports
+          k6 run k6/browser-test.js
 
-      - name: Upload HTML report
+      - name: Upload browser test report
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: k6-dashboard-report
-          path: test-report.html
+          name: k6-browser-report
+          path: reports/
           if-no-files-found: warn

@@ -1,1 +1,8 @@
+# Generated test output (published as CI artifacts, never committed)
+reports/
 sitespeed-result/
+test-report.html
+
+# Local tooling
+node_modules/
+.env

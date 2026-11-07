@@ -75,13 +75,32 @@ services:
       - perf-net
 
   k6:
-    image: grafana/k6:latest
+    image: grafana/k6:2.3.0
     container_name: k6-runner
     profiles: ["tools"]
+    working_dir: /scripts
     volumes:
       - ./:/scripts
     environment:
       - K6_OUT=influxdb=http://influxdb:8086/k6
+      - INFLUXDB_HOST=http://influxdb:8086
+      - TARGET_HOST=http://sample-app:8080
+    networks:
+      - perf-net
+
+  # k6 with headless Chromium, for k6/browser-test.js (Core Web Vitals).
+  k6-browser:
+    image: grafana/k6:2.3.0-with-browser
+    container_name: k6-browser-runner
+    profiles: ["tools"]
+    working_dir: /scripts
+    volumes:
+      - ./:/scripts
+    environment:
+      - K6_OUT=influxdb=http://influxdb:8086/k6
+      - TARGET_HOST=http://sample-app:8080
+      - K6_BROWSER_HEADLESS=true
+      - K6_BROWSER_ARGS=no-sandbox
     networks:
       - perf-net
 
