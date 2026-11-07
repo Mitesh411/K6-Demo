@@ -60,12 +60,17 @@ Metrics and request traces are aggregated in real time in **Grafana** via **Infl
 k6/
   load-test.js         Backend API load test (SLO-gated)
   browser-test.js      Frontend Web Vitals test (k6 browser)
+  tests/               Additional API tests, one scenario per file
   config/
     scenarios.js       Load profile library (smoke, load, stress, spike, soak, breakpoint)
-    thresholds.js      SLO thresholds per load profile
+    thresholds.js      SLO templates per load profile, scoped by endpoint tag
   lib/
-    env.js             Run-time settings (TARGET_HOST, LOAD_PROFILE, ...)
+    options.js         buildOptions(): profile + endpoint tags -> k6 options
+    http.js            tracedRequest, checkEndpoint, parseJson, reportFailure
+    env.js             Run-time settings (TARGET_HOST, INFLUXDB_HOST, TEST_RUN_ID)
     tracing.js         Failed-request traces written to InfluxDB
+.claude/skills/        Claude Code skill for AI-assisted test authoring (/new-k6-test)
+CLAUDE.md              Conventions for AI coding assistants
 sample-app/            System under test (Node.js)
 scripts/               Helper scripts for Docker Compose runs
 grafana/, influxdb/    Dashboard and database provisioning
@@ -105,7 +110,7 @@ All k6 tests read these settings from `-e NAME=value` or environment variables:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `LOAD_PROFILE` | `smoke` | Load profile from `k6/config/scenarios.js` |
+| `LOAD_PROFILE` | the test's own default (`smoke` for `load-test.js`) | Load profile from `k6/config/scenarios.js`. Always overrides the test's default. |
 | `TARGET_HOST` | `http://sample-app:8080` | Base URL of the system under test. Use `http://localhost:8080` outside Docker Compose. |
 | `INFLUXDB_HOST` | *(empty)* | InfluxDB for failed-request traces. Empty disables trace writes. |
 | `TEST_RUN_ID` | `run_<timestamp>` | Tag used by Grafana to compare runs |
@@ -162,14 +167,16 @@ docker compose run --rm \
 
 ### 2. Frontend Performance Testing (k6 browser)
 
-`k6/browser-test.js` loads the sample app's page in headless Chromium. It checks that the page renders the items fetched from the API, and gates on Core Web Vitals (75th percentile, Google's "good" targets):
+`k6/browser-test.js` loads the sample app's page in headless Chromium 10 times. It checks that the page renders the items fetched from the API, and gates on Core Web Vitals at the 75th percentile:
 
-| Metric | Threshold |
-|---|---|
-| Largest Contentful Paint (LCP) | < 2.5 s |
-| First Contentful Paint (FCP) | < 1.8 s |
-| Cumulative Layout Shift (CLS) | < 0.1 |
-| Time to First Byte (TTFB) | < 800 ms |
+| Metric | Lab budget | Google field target |
+|---|---|---|
+| Largest Contentful Paint (LCP) | < 3.5 s | 2.5 s |
+| First Contentful Paint (FCP) | < 3.0 s | 1.8 s |
+| Cumulative Layout Shift (CLS) | < 0.1 | 0.1 |
+| Time to First Byte (TTFB) | < 800 ms | 800 ms |
+
+FCP and LCP use lab budgets because headless Chromium's paint timing is dominated by the browser itself. Locally, a page served in 4 ms measured an FCP of 1.3–2.9 s. Recalibrate these budgets from the first CI baseline.
 
 ```bash
 docker compose run --rm k6-browser run /scripts/k6/browser-test.js
@@ -187,7 +194,17 @@ Run sitespeed.io against your frontend:
 
 This runs headless Chrome audits and exports Google Web Vitals (TTFB, First Paint, DOMContentLoaded, Speed Index, Coach Score) to InfluxDB.
 
-### 4. Running without Docker
+### 4. Additional tests (`k6/tests/`)
+
+| Test | Default profile | What it checks |
+|---|---|---|
+| `items-spike-200rps.js` | spike (peaks at 200 requests/s) | `/api/items` holds p95 < 800 ms during a spike |
+| `health-load-20vus.js` | load (20 VUs for 2 min) | `/health` holds p99 < 100 ms |
+| `flaky-error-contract-smoke.js` | smoke (100 requests) | `/api/flaky` fails only with well-formed JSON errors, and under 75% of the time |
+
+Run any of them the same way, for example `k6 run -e TARGET_HOST=http://localhost:8080 k6/tests/items-spike-200rps.js`. Add `-e LOAD_PROFILE=smoke` for a quick check.
+
+### 5. Running without Docker
 
 You need [k6](https://grafana.com/docs/k6/latest/set-up/install-k6/) (v2.3.0) and Node.js. The browser test also needs Chrome or Chromium installed.
 
@@ -200,7 +217,7 @@ k6 run -e TARGET_HOST=http://localhost:8080 k6/browser-test.js   # Web Vitals
 
 To save an HTML report, add `K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_EXPORT=reports/report.html`. For runs shorter than about a minute, also add `K6_WEB_DASHBOARD_PERIOD=1s`; otherwise k6 skips the report.
 
-### 5. Verify Entire Stack & Ingested Data
+### 6. Verify Entire Stack & Ingested Data
 
 To run automated end-to-end verification across all containers, databases and metrics:
 
@@ -244,6 +261,7 @@ Traces are written only when `INFLUXDB_HOST` is set. `run-k6.sh`, Jenkins and th
 
 | Input | Default | Description |
 |---|---|---|
+| `test_script` | `k6/load-test.js` | API test to run: `k6/load-test.js` or a file in `k6/tests/` |
 | `load_profile` | `smoke` | Load profile for the API test |
 | `target_host` | *(empty)* | Target URL. When empty, the workflow starts the bundled sample app and tests it. |
 | `run_browser_test` | `true` | Also run the browser Web Vitals test |
@@ -266,6 +284,38 @@ The included `Jenkinsfile` provides a parameterized pipeline:
     *   `K6_DURATION`: Test duration, such as `30s` or `1m` (`custom` only).
 
 The k6 stage fails when an SLO threshold is breached.
+
+---
+
+## AI-Assisted Test Authoring
+
+The repository teaches AI coding assistants its conventions, so a new test can be requested in plain English.
+
+- **[CLAUDE.md](CLAUDE.md)** describes the layout, the helpers, the SLO rules and how to verify a test. Claude Code loads it automatically; other assistants can be pointed at it.
+- **`/new-k6-test`** is a Claude Code skill (`.claude/skills/new-k6-test/`). It turns a request into a test in `k6/tests/` from a template, then validates it with `k6 inspect` and a smoke run.
+
+```text
+/new-k6-test a spike test for /api/items at 200 requests/s with p95 < 800 ms
+/new-k6-test a load test for /health with 20 VUs for 2 minutes and p99 under 100 ms
+/new-k6-test a smoke test for /api/flaky that accepts its designed failures, with no more than 75% failing
+```
+
+These three prompts produced the tests in `k6/tests/`. Review generated tests like any other code before merging.
+
+**Building blocks a generated test uses:**
+
+```js
+export const options = buildOptions({
+  defaultProfile: 'spike',              // overridden by -e LOAD_PROFILE
+  endpoints: ['items'],                 // endpoint tags gated by SLOs
+  scenario: { stages: [/* custom shape */] },
+  thresholds: { 'http_req_duration{endpoint:items}': ['p(95)<800', 'p(99)<2000'] },
+});
+
+const request = tracedRequest('GET', '/api/items', { endpoint: 'items' });
+const ok = checkEndpoint(request.res, 'items', { 'items status is 200': (r) => r.status === 200 });
+if (!ok) reportFailure(request);
+```
 
 ---
 
