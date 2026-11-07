@@ -1,34 +1,38 @@
 name: Basic Workflow
-on: [push]
+
+# Manual trigger only: run from the Actions tab -> "Basic Workflow" -> "Run workflow".
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   k6_local_test:
-    name: k6 local test run with xk6-dashboard
+    name: k6 local test run with web dashboard report
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4.2.0
+        uses: actions/checkout@v7.0.1
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v1.2.2
         with:
-          go-version: '1.24'
+          k6-version: '2.3.0'
 
-      - name: Install xk6
-        run: go install go.k6.io/xk6/cmd/xk6@latest
-
-      - name: Build k6 with xk6-dashboard
-        run: |
-          xk6 build --with github.com/grafana/xk6-dashboard@latest
-          mv k6 ./k6-dashboard
-
-      - name: Run k6 test with dashboard output
-        run: |
-          ./k6-dashboard run --out 'dashboard=export=test-report.html' script.js
+      # The web dashboard is built into k6, so no custom xk6 build is needed.
+      - name: Run k6 test with dashboard export
+        env:
+          K6_WEB_DASHBOARD: 'true'
+          K6_WEB_DASHBOARD_EXPORT: test-report.html
+        run: k6 run script.js
 
       - name: Upload HTML report
-        uses: actions/upload-artifact@v4.4.0
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: k6-dashboard-report
           path: test-report.html
+          if-no-files-found: warn
