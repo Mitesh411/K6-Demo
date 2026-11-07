@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-07
 **Owner:** Product Management (AI & Quality Engineering)
-**Status:** Proposed. For review by Engineering and QA leads.
+**Status:** Proposed, with Phase 1 in progress (RM-03 done; RM-04 partly done). For review by Engineering and QA leads. See [Section 10](#10-change-log) for updates.
 
 ---
 
@@ -23,7 +23,7 @@ Turn K6-Demo from a single-request demo into a **reusable, CI-native performance
 | Asset | Purpose | Observations |
 |---|---|---|
 | `script.js` | k6 test script | 9 lines. Sends **1 iteration** of a single `GET` to `https://test-api.k6.io/public/crocodiles/`. Has no checks, no thresholds and no load profile. The `response` variable is never used. |
-| `.github/workflows/basic.yml` | CI pipeline | Runs on `push` only. Installs Go, then builds a custom k6 binary from source with `xk6` and `xk6-dashboard@latest`. Runs the script and uploads an HTML dashboard report as an artifact. |
+| `.github/workflows/basic.yml` | CI pipeline | **Manual trigger only** (`workflow_dispatch`). Installs a pinned k6 (v2.3.0) with `grafana/setup-k6-action@v1.2.2`. Runs the script with k6's built-in web dashboard and always uploads the HTML report as an artifact. Uses a read-only token and a 15-minute timeout. *Updated 2026-11-07.* |
 | `html-report.html` | Sample report | 161 KB generated k6 dashboard export committed to the repo. It is stale and carries an AGPL-3.0 header from Grafana Labs. |
 | `README.md` | Documentation | Generic text with speculative wording ("This file likely defines…"). Claims an MIT license, but the repo has no `LICENSE` file. |
 
@@ -31,21 +31,22 @@ Turn K6-Demo from a single-request demo into a **reusable, CI-native performance
 
 - **Working end-to-end CI loop:** the workflow checks out the code, runs k6 and publishes a visual HTML report as a build artifact.
 - **Rich visual reporting** through the k6 web dashboard export.
+- **Current, reproducible CI toolchain:** since 2026-11-07, all actions and k6 are pinned to their latest releases, and the pipeline has no Go or xk6 build.
 - **Simplified on purpose:** earlier versions imported unpinned remote JavaScript (`raw.githubusercontent.com/.../bundle.js`) and contained a broken `htmlReporter` reference. Both have been removed.
 - **Low complexity:** the codebase is easy to restructure now, before other teams depend on it.
 
 ### 2.3 Critical gaps (verified 2026-11-07)
 
-| # | Gap | Impact |
-|---|---|---|
-| G1 | **The test target is retired.** `test-api.k6.io/public/crocodiles/` now returns `302` and redirects to the `quickpizza.grafana.com` homepage. | Every CI run measures the wrong page and still reports success. **Results are currently meaningless.** |
-| G2 | **No checks or thresholds.** | The build cannot fail on errors or slow responses, so it provides no quality gate. |
-| G3 | **1 iteration, 1 virtual user (VU).** | This is a connectivity ping, not a load test. It produces no information about throughput, latency or saturation. |
-| G4 | **CI builds k6 from source on every push**, using `@latest` versions. | Slow, non-reproducible builds. The step is also redundant: the web dashboard has been built into k6 since v0.49. |
-| G5 | **The report upload is skipped when k6 fails.** | Once thresholds exist, the report would be missing exactly when it is needed. |
-| G6 | **Push-only trigger.** There is no PR, manual or scheduled trigger, no `permissions` block, no concurrency control and no timeout. | No PR gating, no on-demand runs, and wider token permissions than necessary. |
-| G7 | **Repo hygiene.** A generated artifact is committed, there is no `.gitignore` or `LICENSE`, and the README is inaccurate. | Confuses new contributors and creates licensing ambiguity. |
-| G8 | **No structure for growth.** There are no environments, test data, shared helpers, scenarios or results history. | Each new test is a copy-paste fork, so the project cannot scale beyond a demo. |
+| # | Gap | Impact | Status |
+|---|---|---|---|
+| G1 | **The test target is retired.** `test-api.k6.io/public/crocodiles/` now returns `302` and redirects to the `quickpizza.grafana.com` homepage. | Every CI run measures the wrong page and still reports success. **Results are currently meaningless.** | Open (RM-01) |
+| G2 | **No checks or thresholds.** | The build cannot fail on errors or slow responses, so it provides no quality gate. | Open (RM-02) |
+| G3 | **1 iteration, 1 virtual user (VU).** | This is a connectivity ping, not a load test. It produces no information about throughput, latency or saturation. | Open (RM-08) |
+| G4 | **CI built k6 from source on every push**, using `@latest` versions. The `xk6-dashboard` extension it depended on is now **archived** (moved to `grafana-cold-storage`), and the xk6 install path changed in xk6 v1. | Slow, non-reproducible builds that were likely already broken. | **Resolved** 2026-11-07 (RM-03) |
+| G5 | **The report upload was skipped when k6 failed.** | Once thresholds exist, the report would be missing exactly when it is needed. | **Resolved** 2026-11-07 (RM-04) |
+| G6 | **Trigger and security settings.** The workflow ran on every push, had no `permissions` block and no timeout. | Unneeded runs and wider token permissions than necessary. | **Mostly resolved** 2026-11-07: manual-only trigger, read-only token and timeout are in place. Concurrency control, run inputs and SHA pinning remain (RM-04). |
+| G7 | **Repo hygiene.** A generated artifact is committed, there is no `.gitignore` or `LICENSE`, and the README is inaccurate. | Confuses new contributors and creates licensing ambiguity. | Open (RM-05) |
+| G8 | **No structure for growth.** There are no environments, test data, shared helpers, scenarios or results history. | Each new test is a copy-paste fork, so the project cannot scale beyond a demo. | Open (RM-06 to RM-08) |
 
 ---
 
@@ -71,40 +72,44 @@ Items are ranked by **Impact** (value to users and risk reduced) against **Feasi
 
 ## 4. Roadmap at a Glance
 
-| ID | Item | Phase | Priority | Impact | Feasibility | Dev (h) | Test (h) | SP |
-|---|---|---|---|---|---|---:|---:|---:|
-| RM-01 | Repoint the test to a live, configurable target | 1 | P0 | High | High | 2 | 1 | 1 |
-| RM-02 | Add checks and threshold-based SLO gates | 1 | P0 | High | High | 3 | 2 | 2 |
-| RM-03 | Replace the xk6 build with the built-in dashboard and the official action | 1 | P0 | High | High | 3 | 2 | 2 |
-| RM-04 | Harden the CI workflow | 1 | P0 | High | High | 3 | 2 | 2 |
-| RM-05 | Clean up the repo, license and README | 1 | P0 | Medium | High | 3 | 1 | 2 |
-| RM-06 | Project structure and shared helper library | 2 | P1 | High | High | 8 | 4 | 5 |
-| RM-07 | Environment configuration and secrets | 2 | P1 | High | High | 5 | 3 | 3 |
-| RM-08 | Scenario library (smoke, load, stress, spike, soak, breakpoint) | 2 | P1 | High | High | 8 | 5 | 5 |
-| RM-09 | Realistic multi-step user journey | 2 | P1 | High | Medium | 8 | 4 | 5 |
-| RM-10 | CI results reporting (job summary, JUnit, PR comment) | 2 | P1 | High | High | 6 | 3 | 3 |
-| RM-11 | Developer experience tooling | 2 | P1 | Medium | High | 6 | 2 | 3 |
-| RM-12 | Baseline comparison and regression detection | 3 | P1 | High | Medium | 13 | 6 | 8 |
-| RM-13 | Scheduled runs and alerting | 3 | P2 | Medium | High | 5 | 3 | 3 |
-| RM-14 | Test generation from OpenAPI or Postman specs | 3 | P2 | High | Medium | 16 | 8 | 8 |
-| RM-15 | AI results analyst | 3 | P2 | High | Medium | 12 | 8 | 8 |
-| RM-16 | AI-assisted test authoring workflow | 3 | P2 | Medium | High | 6 | 4 | 3 |
-| RM-17 | Historical trend dashboard | 4 | P2 | Medium | Medium | 16 | 6 | 8 |
-| RM-18 | Frontend (browser) performance testing | 4 | P2 | Medium | Medium | 10 | 5 | 5 |
-| RM-19 | Distributed and scale-out execution | 4 | P3 | Medium | Medium | 12 | 6 | 8 |
-| RM-20 | AI SLO recommendation and anomaly detection | 4 | P3 | Medium | Low | 16 | 10 | 13 |
-| RM-21 | Additional protocol coverage (WebSocket, gRPC) | 4 | P3 | Low | High | 8 | 4 | 5 |
-| | **Total** | | | | | **169** | **89** | **102** |
+Dev, Test and SP show the **remaining** effort. Completed work shows 0, and its original estimate is recorded in the item's detail section.
+
+| ID | Item | Phase | Priority | Impact | Feasibility | Status | Dev (h) | Test (h) | SP |
+|---|---|---|---|---|---|---|---:|---:|---:|
+| RM-01 | Repoint the test to a live, configurable target | 1 | P0 | High | High | Not started | 2 | 1 | 1 |
+| RM-02 | Add checks and threshold-based SLO gates | 1 | P0 | High | High | Not started | 3 | 2 | 2 |
+| RM-03 | Replace the xk6 build with the built-in dashboard and the official action | 1 | P0 | High | High | **Done** | 0 | 0 | 0 |
+| RM-04 | Harden the CI workflow | 1 | P0 | High | High | **In progress** | 2 | 1 | 1 |
+| RM-05 | Clean up the repo, license and README | 1 | P0 | Medium | High | Not started | 3 | 1 | 2 |
+| RM-06 | Project structure and shared helper library | 2 | P1 | High | High | Not started | 8 | 4 | 5 |
+| RM-07 | Environment configuration and secrets | 2 | P1 | High | High | Not started | 5 | 3 | 3 |
+| RM-08 | Scenario library (smoke, load, stress, spike, soak, breakpoint) | 2 | P1 | High | High | Not started | 8 | 5 | 5 |
+| RM-09 | Realistic multi-step user journey | 2 | P1 | High | Medium | Not started | 8 | 4 | 5 |
+| RM-10 | CI results reporting (job summary, JUnit, PR comment) | 2 | P1 | High | High | Not started | 6 | 3 | 3 |
+| RM-11 | Developer experience tooling | 2 | P1 | Medium | High | Not started | 6 | 2 | 3 |
+| RM-12 | Baseline comparison and regression detection | 3 | P1 | High | Medium | Not started | 13 | 6 | 8 |
+| RM-13 | Scheduled runs and alerting | 3 | P2 | Medium | High | Not started | 5 | 3 | 3 |
+| RM-14 | Test generation from OpenAPI or Postman specs | 3 | P2 | High | Medium | Not started | 16 | 8 | 8 |
+| RM-15 | AI results analyst | 3 | P2 | High | Medium | Not started | 12 | 8 | 8 |
+| RM-16 | AI-assisted test authoring workflow | 3 | P2 | Medium | High | Not started | 6 | 4 | 3 |
+| RM-17 | Historical trend dashboard | 4 | P2 | Medium | Medium | Not started | 16 | 6 | 8 |
+| RM-18 | Frontend (browser) performance testing | 4 | P2 | Medium | Medium | Not started | 10 | 5 | 5 |
+| RM-19 | Distributed and scale-out execution | 4 | P3 | Medium | Medium | Not started | 12 | 6 | 8 |
+| RM-20 | AI SLO recommendation and anomaly detection | 4 | P3 | Medium | Low | Not started | 16 | 10 | 13 |
+| RM-21 | Additional protocol coverage (WebSocket, gRPC) | 4 | P3 | Low | High | Not started | 8 | 4 | 5 |
+| | **Total remaining** | | | | | | **165** | **86** | **99** |
 
 ### Phase summary
 
 | Phase | Theme | Items | Dev (h) | Test (h) | Total (h) | SP | Indicative timing (1 engineer) |
 |---|---|---|---:|---:|---:|---:|---|
-| 1 | **Stabilize:** make results trustworthy | RM-01 to RM-05 | 14 | 8 | 22 | 9 | Sprint 1 (week 1) |
+| 1 | **Stabilize:** make results trustworthy | RM-01 to RM-05 | 10 | 5 | 15 | 6 | Sprint 1 (week 1). **In progress.** |
 | 2 | **Foundation:** become a real framework | RM-06 to RM-11 | 41 | 21 | 62 | 24 | Sprints 2–3 (weeks 2–4) |
 | 3 | **Insights and AI:** detect regressions and speed up the work | RM-12 to RM-16 | 52 | 29 | 81 | 30 | Sprints 4–5 (weeks 5–7) |
 | 4 | **Scale and explore** | RM-17 to RM-21 | 62 | 31 | 93 | 39 | Sprint 6 onward (week 8+) |
-| | **Total** | 21 items | **169** | **89** | **258** | **102** | About 9 weeks at ~30 productive h/week |
+| | **Total remaining** | 20 open items | **165** | **86** | **251** | **99** | About 8.5 weeks at ~30 productive h/week |
+
+Original baseline: 258 h (169 dev + 89 test) and 102 SP. Completed so far: 7 h and 3 SP (all of RM-03, part of RM-04).
 
 ### Dependency map
 
@@ -112,7 +117,7 @@ Items are ranked by **Impact** (value to users and risk reduced) against **Feasi
 RM-01 ─┬─> RM-02 ─┬─> RM-08 ─> RM-12 ─┬─> RM-15
        │          │                   ├─> RM-17 ─> RM-20
        │          └─> RM-10 ──────────┘
-RM-03 ─┴─> RM-04 ─> RM-10, RM-13
+RM-03 (done) ──> RM-04 ─> RM-10, RM-13
 RM-06 ─┬─> RM-07 ─> RM-09, RM-13, RM-19
        ├─> RM-08
        ├─> RM-14
@@ -146,32 +151,44 @@ RM-05, RM-11, RM-18, RM-21: independent once Phase 1 is complete
   - The SLO values are documented in the README with their rationale.
 - **Dev effort:** 3 h | **Test effort:** 2 h | **SP:** 2
 
-#### RM-03: Replace the xk6 build with the built-in dashboard and the official action
+#### RM-03: Replace the xk6 build with the built-in dashboard and the official action ✅ Done (2026-11-07)
 - **Description:**
   - Remove the Go setup, the `xk6` install and the custom binary build.
   - Use `grafana/setup-k6-action` with a **pinned k6 version**.
   - Enable the built-in web dashboard with `K6_WEB_DASHBOARD=true` and `K6_WEB_DASHBOARD_EXPORT=test-report.html`.
-- **Value:** fixes gap G4. The pipeline gets faster, reproducible versions and fewer moving parts and supply-chain inputs.
-- **Acceptance criteria:**
-  - The workflow has no Go or xk6 steps.
-  - The k6 version is pinned explicitly.
-  - The HTML report renders the same panels as today.
-  - Pipeline duration before and after is recorded in the PR.
-- **Dev effort:** 3 h | **Test effort:** 2 h | **SP:** 2
+- **Value:** fixes gap G4. The pipeline gets faster, reproducible versions and fewer moving parts and supply-chain inputs. This was required, not optional: `grafana/xk6-dashboard` is archived and does not target k6 v2.
+- **Delivered:** the action and tool versions now in `basic.yml` are:
 
-#### RM-04: Harden the CI workflow
+  | Component | Before | After |
+  |---|---|---|
+  | `actions/checkout` | v4.2.0 | v7.0.1 |
+  | `actions/upload-artifact` | v4.4.0 | v7.0.2 |
+  | `actions/setup-go`, Go, `xk6`, `xk6-dashboard` | used | removed |
+  | k6 | custom build, `@latest` | v2.3.0 via `grafana/setup-k6-action@v1.2.2` |
+
+- **Acceptance criteria:**
+  - [x] The workflow has no Go or xk6 steps.
+  - [x] The k6 version is pinned explicitly.
+  - [ ] The HTML report renders the same panels as before. *Confirm on the first manual run.*
+  - [ ] Pipeline duration is recorded from the first manual run.
+- **Original estimate:** Dev 3 h | Test 2 h | SP 2. **Remaining:** verification only, as part of the first manual run.
+
+#### RM-04: Harden the CI workflow 🔄 In progress
 - **Description:**
-  - Add `pull_request` and `workflow_dispatch` triggers. The manual trigger takes inputs for test type and target URL.
-  - Add `if: always()` to the report upload step.
-  - Add `permissions: contents: read`, a `concurrency` group and `timeout-minutes`.
-  - Pin third-party actions to commit SHAs and enable Dependabot for Actions.
-- **Value:** fixes gaps G5 and G6. The workflow gates PRs, supports on-demand runs, always publishes evidence and follows least privilege.
+  - [x] Switch to a manual trigger only (`workflow_dispatch`). The push trigger was removed by decision on 2026-11-07.
+  - [x] Add `if: always()` to the report upload step.
+  - [x] Add `permissions: contents: read` and `timeout-minutes`.
+  - [ ] Add `workflow_dispatch` inputs for test type (RM-08) and target URL (RM-01).
+  - [ ] Add a `concurrency` group.
+  - [ ] Pin third-party actions to commit SHAs and enable Dependabot for Actions.
+- **Value:** fixes gaps G5 and G6. The workflow runs on demand, always publishes evidence and follows least privilege.
 - **Acceptance criteria:**
   - A failing run still uploads its report.
-  - Runs can be started manually from the Actions tab with inputs.
-  - Superseded runs on the same branch are cancelled.
+  - Runs can be started manually from the Actions tab, with inputs.
+  - Overlapping manual runs are queued or cancelled per the concurrency group.
   - Dependabot opens PRs for action updates.
-- **Dev effort:** 3 h | **Test effort:** 2 h | **SP:** 2
+- **Original estimate:** Dev 3 h | Test 2 h | SP 2. **Remaining:** Dev 2 h | Test 1 h | SP 1.
+- **Note:** automatic PR gating is deferred because the pipeline is now manual-only by decision. See open question 6.
 
 #### RM-05: Clean up the repo, license and README
 - **Description:**
@@ -236,7 +253,7 @@ RM-05, RM-11, RM-18, RM-21: independent once Phase 1 is complete
     | Breakpoint | `ramping-arrival-rate`, increasing until failure |
 
   - Select a scenario with `-e TEST_TYPE=load`.
-  - Use **smoke** on every PR, and **load** on merges to `main` or manual runs only.
+  - Make **smoke** the default for manual runs. Pick heavier types through the `workflow_dispatch` input (RM-04). If automatic triggers return (open question 6), run smoke only on PRs.
 - **Value:** fixes gap G3. This is the core capability of a load testing product.
 - **Acceptance criteria:**
   - Each test type runs from a single flag.
@@ -257,11 +274,11 @@ RM-05, RM-11, RM-18, RM-21: independent once Phase 1 is complete
   1. A Markdown summary written to `$GITHUB_STEP_SUMMARY`.
   2. A JUnit XML file, so thresholds appear as test cases in GitHub test reporting.
   3. A `summary.json` artifact that feeds RM-12 and RM-15.
-  4. A sticky PR comment with the key metrics and threshold pass/fail status.
-- **Value:** results are visible in seconds on the PR page, with no need to download artifacts.
+  4. *(Only if a PR trigger is adopted; see open question 6.)* A sticky PR comment with the key metrics and threshold pass/fail status.
+- **Value:** results are visible in seconds on the run page, with no need to download artifacts. While the pipeline is manual-only, the job summary is the main place to read results.
 - **Acceptance criteria:**
   - Every run shows p95, p99, error rate, RPS and threshold status in the job summary.
-  - PRs receive one comment that updates on each run.
+  - If PR triggers are enabled, PRs receive one comment that updates on each run.
 - **Dev effort:** 6 h | **Test effort:** 3 h | **SP:** 3
 
 #### RM-11: Developer experience tooling
@@ -410,8 +427,9 @@ RM-05, RM-11, RM-18, RM-21: independent once Phase 1 is complete
 | KPI | Baseline (today) | Target (end of Phase 3) |
 |---|---|---|
 | Correctness of the CI performance signal | Measures a redirect target and never fails | Tests the intended API, with an enforced SLO gate |
-| CI performance job duration (smoke) | Includes a Go install and a from-source k6 build | Under 2 minutes end to end |
-| PRs gated by a performance check | 0% (push-only trigger) | 100% of PRs to `main` |
+| CI performance job duration (smoke) | Go install and from-source build removed on 2026-11-07. Measure on the first manual run. | Under 2 minutes end to end |
+| On-demand runs | Manual trigger available since 2026-11-07, with no inputs | One-click manual runs with selectable test type and target (RM-04) |
+| PRs gated by a performance check | 0% (manual-only by decision) | Per decision on open question 6 |
 | Time to author a new API test | Ad hoc copy and edit | Under 30 minutes, using templates or generation (RM-14, RM-16) |
 | Regressions caught before merge | Not measured | 80% or more of seeded regressions detected (RM-12) |
 | Time to understand a failed run | Download and inspect the HTML report manually | Under 5 minutes, using the PR summary and AI analysis |
@@ -424,7 +442,8 @@ RM-05, RM-11, RM-18, RM-21: independent once Phase 1 is complete
 |---|---|---|---|
 | Heavy load against the shared public demo service (QuickPizza) is unethical and may be rate-limited | Medium | Medium | Limit PR runs to smoke profiles. Run heavier profiles only against owned environments, enforced by the RM-07 guard. |
 | GitHub-hosted runners give noisy, variable results | High | Medium | Use relative comparison with tolerance bands and repeated baselines (RM-12). Use larger runners or RM-19 for serious load. |
-| Unpinned dependencies (`@latest`, remote jslib imports) break builds or introduce supply-chain risk | Medium | High | Pin the k6 version, action SHAs and jslib versions. Add Dependabot (RM-03, RM-04). |
+| Unpinned or abandoned dependencies (`@latest`, archived extensions, remote jslib imports) break builds or introduce supply-chain risk | Low (was Medium) | High | k6 and actions are pinned to version tags, and the archived `xk6-dashboard` was removed (RM-03, done). Remaining: SHA pinning and Dependabot (RM-04), and pinned jslib versions. |
+| Manual-only trigger means regressions are not caught automatically | Medium | Medium | Run before releases as a documented step. Revisit PR or scheduled triggers once tests are reliable (open question 6, RM-13). |
 | AI features leak sensitive data or give confident but wrong analysis | Medium | High | Sanitize payloads, keep AI output advisory, evaluate it against seeded scenarios, and require human review of generated tests (RM-14, RM-15). |
 | AGPL-licensed report assets conflict with the intended project license | Low | Medium | Stop committing generated reports and complete the license review in RM-05. |
 | AI API costs grow with run frequency | Low | Low | Run analysis only on failures, regressions or `main`. Cap tokens per run. |
@@ -444,9 +463,22 @@ RM-05, RM-11, RM-18, RM-21: independent once Phase 1 is complete
 3. What **license** should the repository carry (affects RM-05)?
 4. Which channel should receive **alerts**: Slack, Teams or RingCentral (affects RM-13)?
 5. What **data-handling policy** applies to sending performance summaries to an external AI provider (affects RM-15 and RM-20)?
+6. The pipeline is **manual-only** as of 2026-11-07. Once RM-01 and RM-02 make results trustworthy, should automatic **PR smoke runs** or **scheduled runs** be added (affects RM-04, RM-10 and RM-13)?
 
 ---
 
 ## 9. Recommended Next Step
 
-Approve **Phase 1 (22 hours, about one sprint)** immediately. It fixes a misleading CI signal at minimal cost and unblocks every later phase. Review Phase 2 scope at the Sprint 1 demo.
+Complete the rest of **Phase 1 (15 hours remaining, under one sprint)**.
+
+The most urgent item is **RM-01**. The workflow is now current, but `script.js` still targets a retired endpoint, so every run still measures the wrong page. Do RM-01 and RM-02 next, then trigger the first manual run to close the RM-03 verification items. Review Phase 2 scope at the Sprint 1 demo.
+
+---
+
+## 10. Change Log
+
+| Date | Change |
+|---|---|
+| 2026-11-07 | Initial roadmap published. |
+| 2026-11-07 | **RM-03 done.** `basic.yml` was moved to k6 v2.3.0 (`grafana/setup-k6-action@v1.2.2`) with the built-in web dashboard, `actions/checkout@v7.0.1` and `actions/upload-artifact@v7.0.2`. Go, xk6 and the archived `xk6-dashboard` extension were removed. |
+| 2026-11-07 | **RM-04 partly done.** The trigger changed from `push` to manual-only (`workflow_dispatch`), the report uploads on failure, and a read-only token and 15-minute timeout were added. RM-08 and RM-10 were adjusted for manual runs, and open question 6 was added. Remaining effort was re-estimated: 251 h and 99 SP. |
