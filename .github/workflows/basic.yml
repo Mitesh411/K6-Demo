@@ -4,6 +4,10 @@ name: Basic Workflow
 on:
   workflow_dispatch:
     inputs:
+      test_script:
+        description: k6 API test to run (k6/load-test.js or a file in k6/tests/)
+        type: string
+        default: k6/load-test.js
       load_profile:
         description: Load profile for the API test
         type: choice
@@ -54,13 +58,19 @@ jobs:
       # Thresholds in k6/config/thresholds.js fail this step when an SLO is breached.
       - name: Run k6 API test
         env:
+          # Passed through env (not inlined) so the input cannot inject shell commands.
+          TEST_SCRIPT: ${{ inputs.test_script }}
           LOAD_PROFILE: ${{ inputs.load_profile }}
           K6_WEB_DASHBOARD_EXPORT: reports/api-report.html
           # Short runs need a short sampling period, or the report is skipped.
           K6_WEB_DASHBOARD_PERIOD: ${{ inputs.load_profile == 'smoke' && '1s' || '10s' }}
         run: |
+          if [[ ! "$TEST_SCRIPT" =~ ^k6/[A-Za-z0-9_/-]+\.js$ ]] || [[ "$TEST_SCRIPT" == *..* ]] || [[ ! -f "$TEST_SCRIPT" ]]; then
+            echo "::error::test_script must be an existing .js file under k6/ (got '$TEST_SCRIPT')"
+            exit 1
+          fi
           mkdir -p reports
-          k6 run k6/load-test.js
+          k6 run "$TEST_SCRIPT"
 
       - name: Upload API test report
         if: always()

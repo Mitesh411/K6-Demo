@@ -4,7 +4,11 @@
 //
 //   TARGET_HOST  base URL of the web app (default: http://sample-app:8080)
 //
-// Thresholds follow Google's "good" Web Vitals targets (75th percentile).
+// Thresholds are *lab* budgets (75th percentile), not Google's field targets
+// (FCP 1.8 s, LCP 2.5 s). In headless Chromium, paint timing is dominated by the
+// browser's own frame scheduling: locally, a page with a 4 ms TTFB measured
+// FCP 1.3-2.9 s. FCP and LCP therefore have headroom; CLS and TTFB use the
+// Google targets. Recalibrate after the first CI baseline (roadmap RM-12).
 
 import { browser } from 'k6/browser';
 import { check } from 'k6';
@@ -15,8 +19,9 @@ export const options = {
     ui: {
       executor: 'shared-iterations',
       vus: 1,
-      iterations: 3,
-      maxDuration: '2m',
+      // 10 samples, so the first (cold browser) page load cannot decide the p75 alone.
+      iterations: 10,
+      maxDuration: '3m',
       options: {
         browser: { type: 'chromium' },
       },
@@ -24,8 +29,8 @@ export const options = {
   },
   thresholds: {
     checks: ['rate==1.0'],
-    browser_web_vital_lcp: ['p(75)<2500'],
-    browser_web_vital_fcp: ['p(75)<1800'],
+    browser_web_vital_lcp: ['p(75)<3500'],
+    browser_web_vital_fcp: ['p(75)<3000'],
     browser_web_vital_cls: ['p(75)<0.1'],
     browser_web_vital_ttfb: ['p(75)<800'],
   },

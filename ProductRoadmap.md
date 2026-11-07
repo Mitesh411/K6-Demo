@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-07
 **Owner:** Product Management (AI & Quality Engineering)
-**Status:** Proposed. Phase 1 is nearly complete (RM-01, RM-02, RM-03 and RM-05 done; RM-04 partly done), and RM-08 and RM-18 are delivered early. For review by Engineering and QA leads. See [Section 10](#10-change-log) for updates.
+**Status:** Proposed. Phase 1 is nearly complete (RM-01, RM-02, RM-03 and RM-05 done; RM-04 partly done). RM-08, RM-16 and RM-18 were delivered early, and RM-06 is mostly done. For review by Engineering and QA leads. See [Section 10](#10-change-log) for updates.
 
 ---
 
@@ -27,13 +27,15 @@ Turn K6-Demo from a single-request demo into a **reusable, CI-native performance
 | Asset | Purpose | Observations |
 |---|---|---|
 | `k6/load-test.js` | Backend API load test | Targets the bundled sample app (`/api/items`, `/api/flaky`). It has a `/health` pre-check, body checks, SLO thresholds and a selectable load profile. Failed requests are traced to InfluxDB when `INFLUXDB_HOST` is set. |
-| `k6/browser-test.js` | Frontend performance test | k6 browser test with Core Web Vitals thresholds (LCP, FCP, CLS, TTFB) and a screenshot. |
-| `k6/config/`, `k6/lib/` | Shared test code | Scenario library, per-profile thresholds, environment settings and tracing helpers. |
+| `k6/browser-test.js` | Frontend performance test | k6 browser test with Core Web Vitals lab budgets (LCP, FCP, CLS, TTFB) over 10 page loads, plus a screenshot. |
+| `k6/tests/` | Additional API tests | Three tests generated from plain-English requests with `/new-k6-test`: a 200 requests/s spike on `/api/items`, a 20-VU load test on `/health`, and an error-contract smoke test on `/api/flaky`. |
+| `k6/config/`, `k6/lib/` | Shared test code | Scenario library, endpoint-scoped SLO templates (`thresholdsFor`), the options builder (`buildOptions`), HTTP helpers (`tracedRequest`, `checkEndpoint`, `reportFailure`), environment settings and tracing. Every test uses them; verified with 24 of 24 test-and-profile combinations resolving. |
+| `CLAUDE.md`, `.claude/skills/new-k6-test/` | AI-assisted authoring | Conventions for AI coding assistants, and a Claude Code skill (`/new-k6-test`) that generates and validates a test from a plain-English request. |
 | `sample-app/` | System under test | Node.js app with a web page, a fast API and a deliberately flaky API. It is owned by the project, so heavy load is safe. |
 | `docker-compose.yml`, `grafana/`, `influxdb/` | Observability stack | InfluxDB 1.8 and Grafana with a pre-provisioned dashboard for run comparison and failure tracing, plus k6, k6 browser and sitespeed.io runners. |
 | `Jenkinsfile`, `scripts/` | Jenkins CI and helper scripts | Parameterized pipeline: suite selection, load profile, VUs and duration. |
 | `.github/workflows/basic.yml` | GitHub Actions CI | **Manual trigger only**, with inputs for load profile, target and browser test. Starts the sample app, runs pinned k6 v2.3.0 and uploads HTML reports even on failure. |
-| `README.md`, `CONTRIBUTING.md`, `LICENSE` | Documentation | Current usage, load profiles, SLOs, CI and contribution guidance. MIT license. |
+| `README.md`, `CONTRIBUTING.md`, `LICENSE` | Documentation | Current usage, load profiles, SLOs, Web Vitals budgets, additional tests, CI inputs (including `test_script`), AI-assisted authoring and contribution guidance. MIT license. |
 
 ### 2.2 Strengths
 
@@ -57,7 +59,7 @@ Turn K6-Demo from a single-request demo into a **reusable, CI-native performance
 | G5 | **The report upload was skipped when k6 failed.** | Once thresholds exist, the report would be missing exactly when it is needed. | **Resolved** 2026-11-07 (RM-04) |
 | G6 | **Trigger and security settings.** The workflow ran on every push, had no `permissions` block and no timeout. | Unneeded runs and wider token permissions than necessary. | **Mostly resolved** 2026-11-07: manual-only trigger, run inputs, concurrency group, read-only token and timeout are in place. SHA pinning and Dependabot remain (RM-04). |
 | G7 | ~~**Repo hygiene.** A generated artifact is committed, there is no `.gitignore` or `LICENSE`, and the README is inaccurate.~~ | ~~Confuses new contributors and creates licensing ambiguity.~~ | **Resolved** 2026-11-07 (RM-05) |
-| G8 | **No structure for growth.** There are no environment configs, test data or results history. | Each new test is a copy-paste fork, so the project cannot scale beyond a demo. | **Partly resolved:** the scenario library and shared `k6/lib` exist. Environments and test data remain (RM-06, RM-07). |
+| G8 | **No structure for growth.** There are no environment configs, test data or results history. | Each new test is a copy-paste fork, so the project cannot scale beyond a demo. | **Mostly resolved:** the scenario library, options builder, HTTP helpers and `k6/tests/` exist, and new tests are a few lines. Environment configs (RM-07) and `SharedArray` test data (RM-06) remain. |
 | G9 | **`scripts/run-sitespeed.sh` writes hard-coded Web Vitals** (`TTFB=45.2`, `PageLoadTime=210.5`, coach score 95) into InfluxDB after every audit. It also hides sitespeed.io failures (`\|\| { ... }`). | Grafana shows fabricated frontend numbers next to real ones, and a failed audit still looks green. | Open. Not yet scheduled. Recommended for the next sprint. |
 | G10 | **`sample-app` runs on `node:20-alpine`**, and Node.js 20 reached end of life in April 2026. | No security fixes for the system-under-test runtime. | Open. Not yet scheduled (small fix). |
 
@@ -94,7 +96,7 @@ Dev, Test and SP show the **remaining** effort. Completed work shows 0, and its 
 | RM-03 | ~~Replace the xk6 build with the built-in dashboard and the official action~~ | 1 | P0 | High | High | **Done** | 0 | 0 | 0 |
 | RM-04 | Harden the CI workflow | 1 | P0 | High | High | **In progress** | 1 | 1 | 1 |
 | RM-05 | ~~Clean up the repo, license and README~~ | 1 | P0 | Medium | High | **Done** | 0 | 0 | 0 |
-| RM-06 | Project structure and shared helper library | 2 | P1 | High | High | Not started | 8 | 4 | 5 |
+| RM-06 | Project structure and shared helper library | 2 | P1 | High | High | **Mostly done** | 2 | 1 | 1 |
 | RM-07 | Environment configuration and secrets | 2 | P1 | High | High | Not started | 5 | 3 | 3 |
 | RM-08 | ~~Scenario library (smoke, load, stress, spike, soak, breakpoint)~~ | 2 | P1 | High | High | **Done** | 0 | 0 | 0 |
 | RM-09 | Realistic multi-step user journey | 2 | P1 | High | Medium | Not started | 8 | 4 | 5 |
@@ -104,27 +106,27 @@ Dev, Test and SP show the **remaining** effort. Completed work shows 0, and its 
 | RM-13 | Scheduled runs and alerting | 3 | P2 | Medium | High | Not started | 5 | 3 | 3 |
 | RM-14 | Test generation from OpenAPI or Postman specs | 3 | P2 | High | Medium | Not started | 16 | 8 | 8 |
 | RM-15 | AI results analyst | 3 | P2 | High | Medium | Not started | 12 | 8 | 8 |
-| RM-16 | AI-assisted test authoring workflow | 3 | P2 | Medium | High | Not started | 6 | 4 | 3 |
+| RM-16 | ~~AI-assisted test authoring workflow~~ | 3 | P2 | Medium | High | **Done** | 0 | 0 | 0 |
 | RM-17 | Historical trend dashboard | 4 | P2 | Medium | Medium | Not started | 16 | 6 | 8 |
 | RM-18 | ~~Frontend (browser) performance testing~~ | 4 | P2 | Medium | Medium | **Done** | 0 | 0 | 0 |
 | RM-19 | Distributed and scale-out execution | 4 | P3 | Medium | Medium | Not started | 12 | 6 | 8 |
 | RM-20 | AI SLO recommendation and anomaly detection | 4 | P3 | Medium | Low | Not started | 16 | 10 | 13 |
 | RM-21 | Additional protocol coverage (WebSocket, gRPC) | 4 | P3 | Low | High | Not started | 8 | 4 | 5 |
-| | **Total remaining** | | | | | | **138** | **72** | **84** |
+| | **Total remaining** | | | | | | **126** | **65** | **77** |
 
 ### Phase summary
 
 | Phase | Theme | Items | Dev (h) | Test (h) | Total (h) | SP | Indicative timing (1 engineer) |
 |---|---|---|---:|---:|---:|---:|---|
 | 1 | **Stabilize:** make results trustworthy | RM-01 to RM-05 | 1 | 1 | 2 | 1 | Sprint 1 (week 1). **Nearly done:** only RM-04 SHA pinning and Dependabot remain. |
-| 2 | **Foundation:** become a real framework | RM-06 to RM-11 | 33 | 16 | 49 | 19 | Sprints 2–3 (weeks 2–3). RM-08 done. |
-| 3 | **Insights and AI:** detect regressions and speed up the work | RM-12 to RM-16 | 52 | 29 | 81 | 30 | Sprints 4–5 (weeks 4–6) |
-| 4 | **Scale and explore** | RM-17 to RM-21 | 52 | 26 | 78 | 34 | Sprint 6 onward (week 7+). RM-18 done. |
-| | **Total remaining** | 15 open items | **138** | **72** | **210** | **84** | About 7 weeks at ~30 productive h/week |
+| 2 | **Foundation:** become a real framework | RM-06 to RM-11 | 27 | 13 | 40 | 15 | Sprints 2–3 (weeks 2–3). RM-08 done; RM-06 mostly done. |
+| 3 | **Insights and AI:** detect regressions and speed up the work | RM-12 to RM-16 | 46 | 25 | 71 | 27 | Sprints 4–5 (weeks 4–5). RM-16 done. |
+| 4 | **Scale and explore** | RM-17 to RM-21 | 52 | 26 | 78 | 34 | Sprint 6 onward (week 6+). RM-18 done. |
+| | **Total remaining** | 14 open items | **126** | **65** | **191** | **77** | About 6.5 weeks at ~30 productive h/week |
 
-Original baseline: 258 h (169 dev + 89 test) and 102 SP. Completed so far: 48 h and 18 SP (RM-01, RM-02, RM-03, RM-05, RM-08, RM-18 and most of RM-04).
+Original baseline: 258 h (169 dev + 89 test) and 102 SP. Completed so far: 67 h and 25 SP (RM-01, RM-02, RM-03, RM-05, RM-08, RM-16, RM-18, most of RM-04 and most of RM-06).
 
-**Re-baseline recommended:** the framework commit (`d472e81`) already delivers part of RM-06 (shared structure) and most of RM-17 Option B (a local InfluxDB and Grafana stack with run comparison). Their estimates have not been reduced yet.
+**Re-baseline recommended:** the framework commit (`d472e81`) already delivers most of RM-17 Option B (a local InfluxDB and Grafana stack with run comparison). Its estimate has not been reduced yet.
 
 ### Dependency map
 
@@ -133,11 +135,11 @@ RM-01 (done) ─┬─> RM-02 (done) ─┬─> RM-08 (done) ─> RM-12 ─┬�
               │                 │                          ├─> RM-17 ─> RM-20
               │                 └─> RM-10 ─────────────────┘
 RM-03 (done) ─┴─> RM-04 ─> RM-10, RM-13
-RM-06 ─┬─> RM-07 ─> RM-09, RM-13, RM-19
-       ├─> RM-14
-       └─> RM-16
+RM-06 (mostly done) ─┬─> RM-07 ─> RM-09, RM-13, RM-19
+                     ├─> RM-14
+                     └─> RM-16 (done)
 RM-11, RM-21: independent.  RM-05 and RM-18: done.
-RM-12 is now unblocked (RM-08 is done).
+RM-12 and RM-14 are now unblocked (RM-08 done; RM-06 helpers in place).
 ```
 
 ---
@@ -234,8 +236,16 @@ RM-12 is now unblocked (RM-08 is done).
 
 **Goal:** a maintainable framework that any team can extend with new APIs and load profiles without copy-paste.
 
-#### RM-06: Project structure and shared helper library
-- **Description:** Restructure the repo into these directories:
+#### RM-06: Project structure and shared helper library 🔄 Mostly done
+- **Progress (2026-11-07):**
+  - [x] `k6/tests/`: one entry-point script per scenario (three tests so far).
+  - [x] `k6/lib/`: `http.js` (traced requests with default headers and tags, endpoint-tagged checks, failure logging), `options.js` (`buildOptions`), `env.js` and `tracing.js`.
+  - [x] `k6/config/`: scenario library and endpoint-scoped SLO templates.
+  - [x] At least two test files reuse `lib/` helpers with no duplicated logic. All four API tests do.
+  - [x] Folder conventions documented in `README.md`, `CONTRIBUTING.md` and `CLAUDE.md`.
+  - [ ] `k6/data/` with `SharedArray` test data. Deferred until an endpoint takes parameters (RM-09); the sample app's endpoints take none today.
+  - [ ] TypeScript (optional).
+- **Original description:** Restructure the repo into these directories:
 
   | Directory | Contents |
   |---|---|
@@ -250,7 +260,7 @@ RM-12 is now unblocked (RM-08 is done).
   - At least two test files reuse `lib/` helpers with no duplicated logic.
   - Test data is loaded once per test through `SharedArray`.
   - The folder conventions are documented.
-- **Dev effort:** 8 h | **Test effort:** 4 h | **SP:** 5
+- **Original estimate:** Dev 8 h | Test 4 h | SP 5. **Remaining:** Dev 2 h | Test 1 h | SP 1 (`SharedArray` test data).
 
 #### RM-07: Environment configuration and secrets
 - **Description:**
@@ -380,16 +390,25 @@ RM-12 is now unblocked (RM-08 is done).
 - **Dev effort:** 12 h | **Test effort:** 8 h | **SP:** 8
 - **Dependencies:** RM-10, RM-12
 
-#### RM-16: AI-assisted test authoring workflow
-- **Description:**
-  - Add a repo-level `CLAUDE.md` that describes project conventions, helpers, scenario types and SLO defaults.
-  - Add reusable prompt templates or slash commands, for example: "create a spike test for `/api/items` at 200 requests/s with p95 < 800 ms".
-  - AI coding assistants then generate scripts that match the framework instead of ad-hoc code.
-- **Value:** consistent, convention-following tests from natural-language requests, at low cost.
+#### ~~RM-16: AI-assisted test authoring workflow~~ ✅ Done (2026-11-07)
+- ~~**Description:** Add a repo-level `CLAUDE.md` and reusable prompt templates or slash commands, so AI coding assistants generate scripts that match the framework instead of ad-hoc code.~~
+- **Delivered:**
+  - **`CLAUDE.md`** (repo root): layout, commands, exit codes, ten test-authoring conventions, verification steps and repo rules (pinned versions, manual-only CI, roadmap upkeep).
+  - **`/new-k6-test` skill** (`.claude/skills/new-k6-test/`): it maps a plain-English request to an endpoint tag, a load profile, a custom shape and SLOs, then writes `k6/tests/<name>.js` from `template.js`. It validates the result with `k6 inspect` and a smoke run, then reports back.
+  - **Framework support:** `buildOptions()` and the `k6/lib/http.js` helpers, so a generated test is a few lines and inherits tags, tracing and endpoint-scoped SLOs. The refactor was checked as behaviour-neutral: `load-test.js` options are identical for all six profiles.
+  - **CI:** a new `test_script` input runs any test in `k6/tests/` from GitHub Actions. The input is validated against path traversal and shell injection.
 - **Acceptance criteria:**
-  - Three sample natural-language requests produce scripts that pass lint and smoke runs without manual restructuring.
-- **Dev effort:** 6 h | **Test effort:** 4 h | **SP:** 3
-- **Dependencies:** RM-06, RM-08
+  - [x] Three natural-language requests produced scripts that pass `k6 inspect` and smoke runs (exit code 0, 100% of checks) without manual restructuring:
+
+    | Request | Generated test | Validation |
+    |---|---|---|
+    | "a spike test for /api/items at 200 requests/s with p95 < 800 ms" | `items-spike-200rps.js` | Smoke passed. Full run passed: p95 65 ms, 0% errors; about 1–2% of iterations dropped on the test laptop. |
+    | "a load test for /health with 20 VUs for 2 minutes and p99 under 100 ms" | `health-load-20vus.js` | Smoke passed. Full run passed: p99 60 ms, 0% errors. |
+    | "a smoke test for /api/flaky that accepts its designed failures …" | `flaky-error-contract-smoke.js` | Smoke passed (100 requests; designed failures within the 75% ceiling) |
+
+  - "Lint" was replaced by `k6 inspect` validation until RM-11 adds ESLint.
+- **Original estimate:** Dev 6 h | Test 4 h | SP 3
+- **Caveat:** the three tests were generated by the same assistant that wrote the skill. Have a teammate run `/new-k6-test` with a fresh request for an independent check.
 
 ---
 
@@ -411,10 +430,11 @@ RM-12 is now unblocked (RM-08 is done).
 #### ~~RM-18: Frontend (browser) performance testing~~ ✅ Done (2026-11-07)
 - ~~**Description:** Add `k6/browser` tests that capture Core Web Vitals and page-level timings.~~
 - **Delivered:** `k6/browser-test.js` loads the sample app in headless Chromium and checks that the heading and the API-loaded items render.
-  - **Thresholds (p75, Google "good" targets):** LCP < 2.5 s, FCP < 1.8 s, CLS < 0.1, TTFB < 800 ms, and 100% of checks.
+  - **Thresholds (p75, over 10 page loads):** lab budgets of LCP < 3.5 s and FCP < 3.0 s; Google targets for CLS < 0.1 and TTFB < 800 ms; and 100% of checks.
+  - **Correction (2026-11-07):** the first version used Google's field targets (FCP < 1.8 s, LCP < 2.5 s) over 3 loads, and it proved flaky. A diagnostic showed headless Chromium on the test machine reported no paint at all by the page's `load` event, even for a bare JSON response with a 4 ms TTFB. Measured FCP (1.3–2.9 s) is browser scheduling, not app cost. The budgets now have headroom and passed 3 of 3 runs (FCP p75 about 1.8 s). Recalibrate from the first CI baseline (RM-12).
   - **Screenshot:** saved to `reports/browser-test.png`.
   - **Where it runs:** a separate GitHub Actions job (`run_browser_test` input) and a Docker Compose service (`k6-browser`, `grafana/k6:2.3.0-with-browser`).
-  - **Verified locally:** all thresholds passed (LCP p75 1.43 s, CLS 0, TTFB 3.6 ms).
+  - **Verified locally:** all thresholds passed (FCP and LCP p75 about 1.8 s, CLS 0, TTFB 4 ms).
 - **Acceptance criteria:**
   - [x] The browser smoke test runs headless (verified locally with k6 2.3.0) and is wired into the GitHub Actions workflow.
   - [x] Web Vitals appear in the report, with thresholds.
@@ -460,7 +480,7 @@ RM-12 is now unblocked (RM-08 is done).
 | CI performance job duration (smoke) | Go install and from-source build removed on 2026-11-07. Measure on the first manual run. | Under 2 minutes end to end |
 | On-demand runs | **Achieved 2026-11-07:** manual runs with load profile, target and browser-test inputs | One-click manual runs with selectable test type and target (RM-04) |
 | PRs gated by a performance check | 0% (manual-only by decision) | Per decision on open question 6 |
-| Time to author a new API test | Ad hoc copy and edit | Under 30 minutes, using templates or generation (RM-14, RM-16) |
+| Time to author a new API test | **Improved 2026-11-07:** a template plus `/new-k6-test` produce a validated test in one request (RM-16). Not yet timed with a teammate. | Under 30 minutes, using templates or generation (RM-14, RM-16) |
 | Regressions caught before merge | Not measured | 80% or more of seeded regressions detected (RM-12) |
 | Time to understand a failed run | Download and inspect the HTML report manually | Under 5 minutes, using the PR summary and AI analysis |
 
@@ -506,8 +526,9 @@ Phase 1 is essentially complete. Next steps, in order:
 1. **Trigger the first manual GitHub Actions run** (smoke profile, browser test on). This closes the verification items for RM-03 and RM-18 and records the pipeline duration.
 2. **Fix gap G9** (fabricated sitespeed.io metrics). It is small, and the dashboard currently mixes real and invented numbers.
 3. **Finish RM-04** (SHA pinning and Dependabot, 2 h) and fix gap G10 (move `sample-app` to a supported Node.js LTS).
-4. **Re-baseline the roadmap.** The framework commit already covers parts of RM-06 and RM-17.
-5. **Start RM-12** (baseline comparison and regression detection), which is now unblocked.
+4. **Re-baseline RM-17.** The framework commit already covers most of Option B.
+5. **Start RM-12** (baseline comparison and regression detection), which is now unblocked. It should also recalibrate the browser test's lab budgets.
+6. **Ask a teammate to try `/new-k6-test`** with a fresh request, for an independent check of RM-16.
 
 ---
 
@@ -520,3 +541,4 @@ Phase 1 is essentially complete. Next steps, in order:
 | 2026-11-07 | **RM-04 partly done.** The trigger changed from `push` to manual-only (`workflow_dispatch`), the report uploads on failure, and a read-only token and 15-minute timeout were added. RM-08 and RM-10 were adjusted for manual runs, and open question 6 was added. Remaining effort was re-estimated: 251 h and 99 SP. |
 | 2026-11-07 | **Framework commit (`d472e81`) reviewed.** It added `sample-app`, InfluxDB, Grafana, Jenkins, sitespeed.io and `k6/load-test.js`. RM-01 was re-scoped to target the owned sample app instead of QuickPizza. New gaps G9 (fabricated sitespeed.io metrics) and G10 (Node.js 20 end of life) were added. |
 | 2026-11-07 | **RM-01, RM-02, RM-05, RM-08 and RM-18 done; RM-04 inputs and concurrency done.** Gaps G1, G2, G3 and G7 resolved. Remaining effort was re-estimated: 210 h (138 dev + 72 test) and 84 SP. |
+| 2026-11-07 | **RM-16 done; RM-06 mostly done.** Added `CLAUDE.md`, the `/new-k6-test` skill and template, `buildOptions()`, the `k6/lib/http.js` helpers, `k6/tests/` with three generated tests, and the `test_script` workflow input. Full-shape runs passed every SLO: the 200 requests/s spike (14,660 requests, p95 65 ms, 0% errors) and the 20-VU load test on `/health` (5,084 requests, p99 60 ms, 0% errors). Open finding: the spike dropped about 1–2% of iterations with VUs to spare, a load-generator limit on the test laptop; confirm on a dedicated runner. The RM-18 browser budgets were corrected after they proved flaky (see RM-18). Remaining effort was re-estimated: 191 h (126 dev + 65 test) and 77 SP. |

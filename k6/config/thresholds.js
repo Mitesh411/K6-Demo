@@ -1,40 +1,61 @@
 // Threshold-based SLO gates. k6 exits with a non-zero code (99) when any
 // threshold is breached, which fails the CI job.
 //
-// Gates are scoped to the `endpoint:items` tag on purpose:
-//  - `/api/flaky` fails ~60% of the time by design (it exists to demo failure
-//    tracing), so it must not count against the SLO.
-//  - Trace writes to InfluxDB are telemetry, not the system under test.
+// Gates are scoped to an `endpoint` tag (set by lib/http.js) on purpose:
+//  - only the endpoints a test names are gated, so deliberately failing
+//    endpoints (such as /api/flaky) and InfluxDB telemetry writes never count;
+//  - one test can gate several endpoints independently.
 
-const NORMAL = {
-  'http_req_failed{endpoint:items}': ['rate<0.01'],
-  'http_req_duration{endpoint:items}': ['p(95)<300', 'p(99)<500'],
-  'checks{endpoint:items}': ['rate>0.99'],
-};
+// SLO templates. Each returns thresholds for one endpoint tag value.
+function normal(endpoint) {
+  return {
+    [`http_req_failed{endpoint:${endpoint}}`]: ['rate<0.01'],
+    [`http_req_duration{endpoint:${endpoint}}`]: ['p(95)<300', 'p(99)<500'],
+    [`checks{endpoint:${endpoint}}`]: ['rate>0.99'],
+  };
+}
 
 // Heavier profiles intentionally push the system, so they allow more latency.
-const UNDER_PRESSURE = {
-  'http_req_failed{endpoint:items}': ['rate<0.05'],
-  'http_req_duration{endpoint:items}': ['p(95)<1000', 'p(99)<2000'],
-  'checks{endpoint:items}': ['rate>0.95'],
-};
+function underPressure(endpoint) {
+  return {
+    [`http_req_failed{endpoint:${endpoint}}`]: ['rate<0.05'],
+    [`http_req_duration{endpoint:${endpoint}}`]: ['p(95)<1000', 'p(99)<2000'],
+    [`checks{endpoint:${endpoint}}`]: ['rate>0.95'],
+  };
+}
 
-export const THRESHOLDS = {
-  smoke: {
-    ...NORMAL,
-    // Stop at once if the target is broken. There is no point continuing.
-    'http_req_failed{endpoint:items}': [{ threshold: 'rate<0.01', abortOnFail: true }],
-  },
-  load: NORMAL,
-  soak: NORMAL,
-  stress: UNDER_PRESSURE,
-  spike: UNDER_PRESSURE,
-  breakpoint: {
-    'http_req_failed{endpoint:items}': [
+// Stop at once if the target is broken. There is no point continuing.
+function smoke(endpoint) {
+  return {
+    ...normal(endpoint),
+    [`http_req_failed{endpoint:${endpoint}}`]: [{ threshold: 'rate<0.01', abortOnFail: true }],
+  };
+}
+
+// Abort as soon as the system breaks; the request rate at that moment is the breaking point.
+function breakpoint(endpoint) {
+  return {
+    [`http_req_failed{endpoint:${endpoint}}`]: [
       { threshold: 'rate<0.10', abortOnFail: true, delayAbortEval: '30s' },
     ],
-    'http_req_duration{endpoint:items}': [
+    [`http_req_duration{endpoint:${endpoint}}`]: [
       { threshold: 'p(95)<2000', abortOnFail: true, delayAbortEval: '30s' },
     ],
-  },
+  };
+}
+
+const SLO_BY_PROFILE = {
+  smoke,
+  load: normal,
+  soak: normal,
+  stress: underPressure,
+  spike: underPressure,
+  breakpoint,
 };
+
+// Default SLO thresholds for a load profile, for each gated endpoint tag.
+export function thresholdsFor(profile, endpoints) {
+  const build = SLO_BY_PROFILE[profile];
+  if (!build) throw new Error(`No SLO defined for load profile "${profile}".`);
+  return Object.assign({}, ...endpoints.map((endpoint) => build(endpoint)));
+}
