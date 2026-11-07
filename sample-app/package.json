@@ -1,0 +1,9 @@
+{
+  "name": "sample-app",
+  "version": "1.0.0",
+  "description": "Sample API and frontend web application for performance testing",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  }
+}
